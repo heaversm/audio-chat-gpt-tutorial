@@ -33,7 +33,18 @@ app.use(express.static(publicDir));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
-const onRecognizeData = (data) => {};
+const onRecognizeData = (data) => {
+  const transcript =
+    data.results[0] && data.results[0].alternatives[0]
+      ? `${data.results[0].alternatives[0].transcript}\n`
+      : "\n\nReached transcription time limit, press Ctrl+C\n";
+  if (USE_INTERIM_RESULTS) {
+    streamScript = transcript;
+  } else {
+    streamScript += transcript;
+  }
+  console.log("streamScript", streamScript);
+};
 
 const initRecognizeStream = () => {
   const userRequestConfig = {
