@@ -1,3 +1,29 @@
+let transcriptionInterval;
+
+const toggleTranscriptionPolling = (active = false) => {
+  console.log("toggleTranscriptionPolling", active);
+  if (active) {
+    transcriptionInterval = setInterval(() => {
+      fetch("/api/getTranscription", {
+        method: "get",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.script) {
+            console.log(data.script);
+            document.querySelector(".audio-transcript").innerText = data.script;
+          }
+        })
+        .catch((err) => console.log(err));
+    }, 1000);
+  } else {
+    clearInterval(transcriptionInterval);
+  }
+};
+
 const handleServerRecord = async () => {
   return new Promise((resolve, reject) => {
     fetch("api/recordVoice", {
@@ -18,13 +44,34 @@ const handleServerRecord = async () => {
   });
 };
 
+const handleServerStopRecord = async () => {
+  return new Promise((resolve, reject) => {
+    fetch("/api/stopRecordVoice", {
+      method: "get",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then((res) => {
+        resolve(res.json());
+      })
+      .catch((err) => {
+        reject(err);
+      });
+  });
+};
+
 const onRecordDown = async () => {
   //TODO:
   //manage the state
   //manage the UI
   //tell the server to access the user's mic and start recording
+  handleServerRecord().then(async () => {
+    //manage the UI
+    //start looking for the latest transcript results
+    toggleTranscriptionPolling(true);
+  });
   //listen for transcript results from the server
-  handleServerRecord();
 };
 
 const onRecordUp = async () => {
@@ -32,6 +79,8 @@ const onRecordUp = async () => {
   //manage the state
   //manage the UI
   //tell the server to stop recording
+  toggleTranscriptionPolling(false);
+  handleServerStopRecord();
   //stop looking for new transcript results
   //tell the server to submit the transcription to chatGPT
   //listen for chatGPTs response

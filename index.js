@@ -6,9 +6,10 @@ const process = require("process");
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const { v4: uuidv4 } = require("uuid");
+const recorder = require("node-record-lpcm16");
 
 // Imports the Google Cloud client library
-const speech = require('@google-cloud/speech');
+const speech = require("@google-cloud/speech");
 const speechClient = new speech.SpeechClient();
 
 const SAMPLE_RATE_HERTZ = 16000;
@@ -18,6 +19,15 @@ const RECOGNIZE_CONFIG = {
   sampleRateHertz: SAMPLE_RATE_HERTZ, //HZ - you generally need to sample more than twice the highest frequency of any sound wave you wish to capture digitally
   languageCode: "en-US", //BCP-47 language code - https://cloud.google.com/speech-to-text/docs/languages
   streamingLimit: 290000, //max number of milliseconds to stream audio
+};
+
+const RECORD_CONFIG = {
+  sampleRateHertz: SAMPLE_RATE_HERTZ,
+  threshold: 0,
+  // Other options, see https://www.npmjs.com/package/node-record-lpcm16#options
+  verbose: false,
+  recordProgram: "rec", // Try also "arecord" or "sox"
+  silence: "10.0", //how long to wait in silence before ending
 };
 
 let streamScript = ""; //will hold the transcript of the user's request
@@ -46,6 +56,24 @@ const onRecognizeData = (data) => {
   console.log("streamScript", streamScript);
 };
 
+const recordVoice = () => {
+  if (!recording) {
+    recording = recorder.record(RECORD_CONFIG);
+
+    // Start recording and send the microphone input to the Speech API.
+    // Ensure SoX is installed, see https://www.npmjs.com/package/node-record-lpcm16#dependencies
+    recording.stream().on("error", console.error).pipe(recognizeStream);
+  } else {
+    recording.resume();
+  }
+  console.log("Listening");
+};
+
+const stopRecordVoice = () => {
+  console.log("api stop");
+  recognizeStream.pause();
+};
+
 const initRecognizeStream = () => {
   const userRequestConfig = {
     config: RECOGNIZE_CONFIG,
@@ -58,13 +86,25 @@ const initRecognizeStream = () => {
   console.log("recognize stream initialized");
 };
 
+app.get("/api/getTranscription", (req, res) => {
+  res.status(200).json({ script: streamScript });
+});
+
 app.get("/api/recordVoice", (req, res) => {
   console.log("apiRecordVoice");
   //if there's no recognize stream, create one
-  initRecognizeStream();
+  if (!recognizeStream) {
+    initRecognizeStream();
+  }
   //then record voice
+  recordVoice();
   //then return a response letting the client know that it's recording
   res.status(200).json({ message: "recording" });
+});
+
+app.get("/api/stopRecordVoice", (req, res) => {
+  stopRecordVoice();
+  res.status(200).json({ message: "recording stopped" });
 });
 
 app.get("/", (req, res) => {
