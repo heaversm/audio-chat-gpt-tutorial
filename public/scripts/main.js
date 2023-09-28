@@ -61,6 +61,25 @@ const handleServerStopRecord = async () => {
   });
 };
 
+const handleServerSubmitTranscription = () => {
+  return new Promise((resolve, reject) => {
+    fetch("/api/submitTranscription", {
+      method: "get",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        resolve(data.aiResponse);
+      })
+      .catch((err) => {
+        console.log(err);
+        reject(err);
+      });
+  });
+};
+
 const onRecordDown = async () => {
   //TODO:
   //manage the state
@@ -74,19 +93,56 @@ const onRecordDown = async () => {
   //listen for transcript results from the server
 };
 
+const writeAIResponse = (aiResponse) => {
+  document.querySelector(".audio-response").innerText = aiResponse;
+};
+
+const generateAIResponseFile = () => {
+  return new Promise((resolve, reject) => {
+    fetch("/api/generateAIResponseFile", {
+      method: "get",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        resolve(data.speechFile);
+      })
+      .catch((err) => {
+        console.log(err);
+        reject(err);
+      });
+  });
+};
+
+const playAudioResponse = async (speechFile) => {
+  //TODO:
+};
+
 const onRecordUp = async () => {
   //TODO:
   //manage the state
   //manage the UI
   //tell the server to stop recording
   toggleTranscriptionPolling(false);
-  handleServerStopRecord();
-  //stop looking for new transcript results
-  //tell the server to submit the transcription to chatGPT
-  //listen for chatGPTs response
-  //write the response on screen
-  //generate an audio file of the response
-  //play the audio file
+  handleServerStopRecord().then(async () => {
+    //tell the server to submit the transcription to chatGPT
+    handleServerSubmitTranscription().then(async (aiResponse) => {
+      console.log(aiResponse);
+
+      writeAIResponse(aiResponse);
+      generateAIResponseFile().then(async (speechFile) => {
+        globalSpeechFile = speechFile; //store in global...for now
+        try {
+          playAudioResponse(speechFile);
+          //when play is done, handleAudioResponseFinished will be called
+        } catch (error) {
+          console.log("error playing audio response", error);
+        }
+      });
+    });
+  });
 };
 
 const addEventListeners = () => {
