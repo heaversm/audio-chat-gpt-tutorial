@@ -12,11 +12,6 @@ const recorder = require("node-record-lpcm16");
 const speech = require("@google-cloud/speech");
 const speechClient = new speech.SpeechClient();
 
-// Imports the Google Cloud text to speech library
-const textToSpeech = require('@google-cloud/text-to-speech');
-const ttsClient = new textToSpeech.TextToSpeechClient();
-
-
 const OpenAI = require("openai");
 require("dotenv").config();
 
@@ -135,38 +130,6 @@ app.get("/api/submitTranscription", async (req, res) => {
 
 app.get("/api/getTranscription", (req, res) => {
   res.status(200).json({ script: streamScript });
-});
-
-app.get("/api/generateAIResponseFile", async (req, res) => {
-  console.log("api generate");
-  const speechRequest = {
-    input: { text: aiResponse },
-    // Select the language and SSML voice gender (optional)
-    //https://cloud.google.com/text-to-speech/docs/ssml
-    voice: {
-      languageCode: "en-US",
-      name: "en-US-Studio-M",
-      ssmlGender: "MALE",
-    },
-    // select the type of audio encoding
-    audioConfig: { audioEncoding: "MP3" },
-  };
-
-  // Performs the text-to-speech request
-  const [speechResponse] = await ttsClient.synthesizeSpeech(speechRequest);
-  // Write the binary audio content to a local file
-  const speechFileName = uuidv4();
-  const speechFilePath = getSpeechFilePath(speechFileName);
-  // console.log("speechFilePath", speechFilePath);
-  try {
-    await fsPromises.writeFile(speechFilePath, speechResponse.audioContent, {
-      encoding: "binary",
-      flag: "w", //write (default)
-    });
-    res.status(200).json({ message: "success", speechFile: speechFileName });
-  } catch (err) {
-    console.error(err);
-  }
 });
 
 app.get("/api/recordVoice", (req, res) => {

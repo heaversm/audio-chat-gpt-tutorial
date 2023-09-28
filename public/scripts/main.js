@@ -93,33 +93,6 @@ const onRecordDown = async () => {
   //listen for transcript results from the server
 };
 
-const writeAIResponse = (aiResponse) => {
-  document.querySelector(".audio-response").innerText = aiResponse;
-};
-
-const generateAIResponseFile = () => {
-  return new Promise((resolve, reject) => {
-    fetch("/api/generateAIResponseFile", {
-      method: "get",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        resolve(data.speechFile);
-      })
-      .catch((err) => {
-        console.log(err);
-        reject(err);
-      });
-  });
-};
-
-const playAudioResponse = async (speechFile) => {
-  //TODO:
-};
-
 const onRecordUp = async () => {
   //TODO:
   //manage the state
@@ -131,16 +104,9 @@ const onRecordUp = async () => {
     handleServerSubmitTranscription().then(async (aiResponse) => {
       console.log(aiResponse);
 
-      writeAIResponse(aiResponse);
-      generateAIResponseFile().then(async (speechFile) => {
-        globalSpeechFile = speechFile; //store in global...for now
-        try {
-          playAudioResponse(speechFile);
-          //when play is done, handleAudioResponseFinished will be called
-        } catch (error) {
-          console.log("error playing audio response", error);
-        }
-      });
+      //write the response on screen
+      //generate an audio file of the response
+      //play the audio file
     });
   });
 };
