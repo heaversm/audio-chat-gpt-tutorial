@@ -58,10 +58,15 @@ const port = process.env.PORT || 3333;
 
 const templates = path.join(process.cwd(), "templates");
 const publicDir = path.join(process.cwd(), "public");
+const responseFileDir = path.join(publicDir, "responseFiles");
 
 app.use(express.static(publicDir));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
+
+const getSpeechFilePath = (speechFileName) => {
+  return path.join(responseFileDir, `/${speechFileName}.mp3`);
+};
 
 const onRecognizeData = (data) => {
   const transcript =
@@ -169,6 +174,19 @@ app.get("/api/generateAIResponseFile", async (req, res) => {
   }
 });
 
+const clearRecognizeStream = () => {
+  if (recognizeStream) {
+    recognizeStream.end();
+    recognizeStream.removeListener("data", onRecognizeData);
+    recognizeStream = null;
+  }
+};
+
+const clearRecording = () => {
+  recording.stop();
+  recording = null;
+};
+
 app.get("/api/recordVoice", (req, res) => {
   console.log("apiRecordVoice");
   //if there's no recognize stream, create one
@@ -185,6 +203,26 @@ app.get("/api/stopRecordVoice", (req, res) => {
   stopRecordVoice();
   res.status(200).json({ message: "recording stopped" });
 });
+
+app.get("/api/clearTranscription", (req, res) => {
+  streamScript = "";
+  clearRecognizeStream();
+  clearRecording();
+  res.status(200).json({ message: "transcription cleared" });
+});
+
+app.post("/api/deleteResponseFile", (req, res) => {
+  const { speechFile } = req.body;
+  const speechFilePath = getSpeechFilePath(speechFile);
+  fs.unlink(speechFilePath, (err) => {
+    if (err) {
+      res.status(500).json({ message: `error deleting audio, ${err}` });
+    } else {
+      res.status(200).json({ message: "audio file deleted" });
+    }
+  });
+});
+
 
 app.get("/", (req, res) => {
   res.sendFile("index.html", { root: templates });

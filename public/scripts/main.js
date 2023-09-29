@@ -1,4 +1,5 @@
 let transcriptionInterval;
+let globalSpeechFile;
 
 const toggleTranscriptionPolling = (active = false) => {
   console.log("toggleTranscriptionPolling", active);
@@ -116,8 +117,78 @@ const generateAIResponseFile = () => {
   });
 };
 
-const playAudioResponse = async (speechFile) => {
-  //TODO:
+const playAudioResponse = (speechFile) => {
+  const audioPlayer = document.querySelector(".audio-response__player");
+  audioPlayer.src = `/responseFiles/${speechFile}.mp3`;
+
+  audioPlayer.addEventListener("ended", () => {
+    console.log("audio playback ended");
+    handleAudioResponseFinished(speechFile);
+  });
+
+  audioPlayer.play();
+};
+
+const clearAudioTranscript = () => {
+  document.querySelector(".audio-transcript").innerText = "";
+};
+
+const clearAudioResponse = () => {
+  document.querySelector(".audio-response").innerText = "";
+};
+
+const handleServerClearTranscription = () => {
+  return new Promise((resolve, reject) => {
+    fetch("/api/clearTranscription", {
+      method: "get",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log(data);
+        resolve();
+      })
+      .catch((err) => {
+        console.log(err);
+        reject(err);
+      });
+  });
+};
+
+const handleDeleteSpeechFile = (speechFile) => {
+  return new Promise((resolve, reject) => {
+    fetch("/api/deleteResponseFile", {
+      method: "post",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ speechFile: speechFile }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log(data);
+        globalSpeechFile = null;
+        resolve();
+      })
+      .catch((err) => {
+        console.log(err);
+        reject(err);
+      });
+  });
+};
+
+const handleAudioResponseFinished = async (speechFile) => {
+  //clear the transcript from the textbox
+  clearAudioTranscript();
+  //clear audio response from the textbox
+  clearAudioResponse();
+  //reset the state and UI
+  //clear the transcript from the server
+  handleServerClearTranscription();
+  //delete the speechFile from the server
+  handleDeleteSpeechFile(speechFile);
 };
 
 const onRecordUp = async () => {
