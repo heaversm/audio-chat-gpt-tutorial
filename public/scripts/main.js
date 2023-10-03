@@ -3,16 +3,38 @@ let globalSpeechFile; //holds the audio file for the ai's response
 let globalTranscript; //holds the transcribed audio from the user's mic
 let globalAIResponse; //holds the text response of the LLM to the user's transcript query
 let serviceInUse; //when true, hold off on any other recordings
+let userId;
+
+const handleInitUser = async () => {
+  return new Promise((resolve, reject) => {
+    fetch("/api/initUser", {
+      method: "get",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log(data);
+        userId = data.userId;
+        resolve();
+      })
+      .catch((err) => {
+        reject(err);
+      });
+  });
+};
 
 const toggleTranscriptionPolling = (active = false) => {
-  // console.log("toggleTranscriptionPolling", active);
+  console.log("toggleTranscriptionPolling", active);
   if (active) {
     transcriptionInterval = setInterval(() => {
       fetch("/api/getTranscription", {
-        method: "get",
+        method: "post",
         headers: {
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({ userId: userId }),
       })
         .then((res) => res.json())
         .then((data) => {
@@ -53,10 +75,11 @@ const getServiceStatus = async () => {
 const handleServerRecord = async () => {
   return new Promise((resolve, reject) => {
     fetch("api/recordVoice", {
-      method: "get",
+      method: "post",
       headers: {
         "Content-Type": "application/json",
       },
+      body: JSON.stringify({ userId: userId }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -73,10 +96,11 @@ const handleServerRecord = async () => {
 const handleServerStopRecord = async () => {
   return new Promise((resolve, reject) => {
     fetch("/api/stopRecordVoice", {
-      method: "get",
+      method: "post",
       headers: {
         "Content-Type": "application/json",
       },
+      body: JSON.stringify({ userId: userId }),
     })
       .then((res) => {
         resolve(res.json());
@@ -88,12 +112,14 @@ const handleServerStopRecord = async () => {
 };
 
 const handleServerSubmitTranscription = () => {
+  console.log("handleServerSubmitTranscription", globalTranscript, userId);
   return new Promise((resolve, reject) => {
     fetch("/api/submitTranscription", {
-      method: "get",
+      method: "post",
       headers: {
         "Content-Type": "application/json",
       },
+      body: JSON.stringify({ transcript: globalTranscript, userId: userId }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -111,11 +137,13 @@ const onRecordDown = async () => {
   //manage the state
   //manage the UI
   //tell the server to access the user's mic and start recording
-  serviceInUse = await getServiceStatus();
+  //serviceInUse = await getServiceStatus();
+  serviceInUse = false;
   if (serviceInUse) {
     //TODO: implement better system for user notifications
     alert("service in use - please try again in a minute or so");
   } else {
+    console.log("down", Date.now());
     handleServerRecord().then(async () => {
       //manage the UI
       //start looking for the latest transcript results
@@ -137,7 +165,7 @@ const generateAIResponseFile = () => {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ aiResponse: globalAIResponse }),
+      body: JSON.stringify({ aiResponse: globalAIResponse, userId: userId }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -167,10 +195,11 @@ const clearAudioResponse = () => {
 const handleServerClearTranscription = () => {
   return new Promise((resolve, reject) => {
     fetch("/api/clearTranscription", {
-      method: "get",
+      method: "post",
       headers: {
         "Content-Type": "application/json",
       },
+      body: JSON.stringify({ userId: userId }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -212,7 +241,7 @@ const handleDeleteSpeechFile = (speechFile) => {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ speechFile: speechFile }),
+      body: JSON.stringify({ speechFile: speechFile, userId: userId }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -238,7 +267,7 @@ const handleAudioResponseFinished = async () => {
     if (globalSpeechFile) {
       await handleDeleteSpeechFile(globalSpeechFile);
       console.log("speech file deleted");
-      await handleServerSetInUse(false);
+      //await handleServerSetInUse(false);
     }
   });
 };
@@ -289,7 +318,8 @@ const addEventListeners = () => {
     .addEventListener("mouseup", onRecordUp);
 };
 
-const init = () => {
+const init = async () => {
+  await handleInitUser();
   addEventListeners();
 };
 

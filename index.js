@@ -48,9 +48,19 @@ const RECORD_CONFIG = {
   silence: "10.0", //how long to wait in silence before ending
 };
 
-let streamScript = ""; //will hold the transcript of the user's request
-let recognizeStream; //will hold the google speech to text stream
-let recording; //will hold the noderecord instance;
+const users = []; //will hold the active users of the service
+
+class User {
+  constructor() {
+    this.id = uuidv4();
+    this.speechFile = null;
+    this.streamScript = "";
+    this.aiResponse = null;
+    this.recording = null;
+    this.recognizeStream = null;
+  }
+}
+
 //TODO: enable more than one user to use the service at a time
 let serviceInUse = false; //disables recording when a user is actively transcribing
 
@@ -68,58 +78,71 @@ const getSpeechFilePath = (speechFileName) => {
   return path.join(responseFileDir, `/${speechFileName}.mp3`);
 };
 
-const onRecognizeData = (data) => {
+const onRecognizeData = (data, user) => {
   const transcript =
     data.results[0] && data.results[0].alternatives[0]
       ? `${data.results[0].alternatives[0].transcript}\n`
       : "\n\nReached transcription time limit, press Ctrl+C\n";
   if (USE_INTERIM_RESULTS) {
-    streamScript = transcript;
+    user.streamScript = transcript;
+    // streamScript = transcript;
   } else {
-    streamScript += transcript;
+    user.streamScript += transcript;
+    // streamScript += transcript;
   }
-  console.log("streamScript", streamScript);
 };
 
-const recordVoice = () => {
-  if (!recording) {
-    recording = recorder.record(RECORD_CONFIG);
+const getUser = (userId) => {
+  return users.find((user) => user.id === userId);
+};
+
+const recordVoice = (user) => {
+  console.log("record voice", user.id);
+  if (!user.recording) {
+    user.recording = recorder.record(RECORD_CONFIG);
 
     // Start recording and send the microphone input to the Speech API.
     // Ensure SoX is installed, see https://www.npmjs.com/package/node-record-lpcm16#dependencies
-    recording.stream().on("error", console.error).pipe(recognizeStream);
+    user.recording
+      .stream()
+      .on("error", console.error)
+      .pipe(user.recognizeStream);
   } else {
-    recording.resume();
+    user.recording.resume();
   }
   console.log("Listening");
 };
 
-const stopRecordVoice = () => {
+const stopRecordVoice = (user) => {
   console.log("api stop");
-  recognizeStream.pause();
+  user.recognizeStream.pause();
 };
 
-const initRecognizeStream = () => {
+const initRecognizeStream = (user) => {
   const userRequestConfig = {
     config: RECOGNIZE_CONFIG,
     interimResults: USE_INTERIM_RESULTS,
   };
-  recognizeStream = speechClient
+  user.recognizeStream = speechClient
     .streamingRecognize(userRequestConfig)
     .on("error", console.error)
-    .on("data", onRecognizeData);
+    .on("data", (data) => {
+      onRecognizeData(data, user);
+    });
   console.log("recognize stream initialized");
 };
 
-app.get("/api/submitTranscription", async (req, res) => {
-  console.log("submit transcription");
+app.post("/api/submitTranscription", async (req, res) => {
+  const { userId, transcript } = req.body;
+  const user = getUser(userId);
+  console.log("api submit transcription");
   //create a chat completion
   const completion = await openai.chat.completions.create({
     messages: [
       {
         role: "user",
         content: !COMPLETIONS_CONFIG.be_brief
-          ? streamScript
+          ? transcript
           : `respond to the following query, and be as brief as possible in your response: ${streamScript}`,
       },
     ],
@@ -129,6 +152,8 @@ app.get("/api/submitTranscription", async (req, res) => {
   });
   try {
     const aiResponse = completion.choices[0].message.content;
+    user.aiResponse = aiResponse;
+
     res.status(200).json({ message: "success", aiResponse: aiResponse });
   } catch (error) {
     console.log(error);
@@ -138,12 +163,26 @@ app.get("/api/submitTranscription", async (req, res) => {
   //return that to the frontend
 });
 
-app.get("/api/getTranscription", (req, res) => {
-  res.status(200).json({ script: streamScript });
+app.get("/api/initUser", (req, res) => {
+  const user = new User();
+  console.log("user:", user.id);
+  users.push(user);
+  res.status(200).json({ message: "user initialized", userId: user.id });
+});
+
+app.post("/api/getTranscription", (req, res) => {
+  const { userId } = req.body;
+  const user = getUser(userId);
+  if (!user) {
+    res.status(500).json({ message: "no user found" });
+  } else {
+    res.status(200).json({ script: user.streamScript });
+  }
 });
 
 app.post("/api/generateAIResponseFile", async (req, res) => {
-  const { aiResponse } = req.body;
+  const { aiResponse, userId } = req.body;
+  const user = getUser(userId);
   console.log("api generateResponseFile");
   const speechRequest = {
     input: { text: aiResponse },
@@ -164,6 +203,8 @@ app.post("/api/generateAIResponseFile", async (req, res) => {
   const speechFileName = uuidv4();
   const speechFilePath = getSpeechFilePath(speechFileName);
   // console.log("speechFilePath", speechFilePath);
+  user.speechFile = speechFileName;
+
   try {
     await fsPromises.writeFile(speechFilePath, speechResponse.audioContent, {
       encoding: "binary",
@@ -178,18 +219,18 @@ app.post("/api/generateAIResponseFile", async (req, res) => {
 });
 
 //restarting a stream: https://github.com/GoogleCloudPlatform/nodejs-docs-samples/blob/main/speech/infiniteStreaming.js
-const clearRecognizeStream = () => {
-  if (recognizeStream) {
-    recognizeStream.end();
-    recognizeStream.removeListener("data", onRecognizeData);
-    recognizeStream = null;
+const clearRecognizeStream = (user) => {
+  if (user.recognizeStream) {
+    user.recognizeStream.end();
+    user.recognizeStream.removeListener("data", onRecognizeData);
+    user.recognizeStream = null;
   }
 };
 
-const clearRecording = () => {
-  if (recording) {
-    recording.stop();
-    recording = null;
+const clearRecording = (user) => {
+  if (user.recording) {
+    user.recording.stop();
+    user.recording = null;
   }
 };
 
@@ -198,46 +239,55 @@ app.get("/api/getServiceStatus", (req, res) => {
   res.status(200).json({ serviceInUse: serviceInUse });
 });
 
-app.get("/api/recordVoice", (req, res) => {
+app.post("/api/recordVoice", (req, res) => {
+  const { userId } = req.body;
+  const user = getUser(userId);
   console.log("apiRecordVoice");
   //only one user at a time for now
   if (serviceInUse) {
     res.status(500).json({ message: "service in use" });
   } else {
-    serviceInUse = true;
+    //serviceInUse = true; //MH TODO: test concurrent users
   }
   //if there's no recognize stream, create one
-  if (!recognizeStream) {
-    initRecognizeStream();
+  if (!user.recognizeStream) {
+    initRecognizeStream(user);
   }
   //then record voice
-  recordVoice();
+  recordVoice(user);
   //then return a response letting the client know that it's recording
   res.status(200).json({ message: "recording" });
 });
 
-app.get("/api/stopRecordVoice", (req, res) => {
-  if (!recognizeStream) {
+app.post("/api/stopRecordVoice", (req, res) => {
+  const { userId } = req.body;
+  const user = getUser(userId);
+  if (!user.recognizeStream) {
     res.status(500).json({ message: "no recognize stream" });
   }
-  stopRecordVoice();
+  stopRecordVoice(user);
   res.status(200).json({ message: "recording stopped" });
 });
 
-app.get("/api/clearTranscription", (req, res) => {
-  streamScript = "";
-  clearRecognizeStream();
-  clearRecording();
+app.post("/api/clearTranscription", (req, res) => {
+  const { userId } = req.body;
+  const user = getUser(userId);
+  user.streamScript = "";
+  clearRecognizeStream(user);
+  clearRecording(user);
   res.status(200).json({ message: "transcription cleared" });
 });
 
 app.post("/api/deleteResponseFile", (req, res) => {
-  const { speechFile } = req.body;
+  const { speechFile, userId } = req.body;
+  const user = getUser(userId);
   const speechFilePath = getSpeechFilePath(speechFile);
   fs.unlink(speechFilePath, (err) => {
     if (err) {
       res.status(500).json({ message: `error deleting audio, ${err}` });
     } else {
+      user.speechFile = null;
+      user.aiResponse = null;
       res.status(200).json({ message: "audio file deleted" });
     }
   });
