@@ -1,7 +1,8 @@
-let transcriptionInterval;
-let globalSpeechFile;
-let globalTranscript;
-let serviceInUse;
+let transcriptionInterval; //holds the interval to check for the latest transcript
+let globalSpeechFile; //holds the audio file for the ai's response
+let globalTranscript; //holds the transcribed audio from the user's mic
+let globalAIResponse; //holds the text response of the LLM to the user's transcript query
+let serviceInUse; //when true, hold off on any other recordings
 
 const toggleTranscriptionPolling = (active = false) => {
   // console.log("toggleTranscriptionPolling", active);
@@ -129,12 +130,14 @@ const writeAIResponse = (aiResponse) => {
 };
 
 const generateAIResponseFile = () => {
+  //generate audio file from ai text based answer
   return new Promise((resolve, reject) => {
     fetch("/api/generateAIResponseFile", {
-      method: "get",
+      method: "post",
       headers: {
         "Content-Type": "application/json",
       },
+      body: JSON.stringify({ aiResponse: globalAIResponse }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -181,6 +184,27 @@ const handleServerClearTranscription = () => {
   });
 };
 
+const handleServerSetInUse = (isInUse = false) => {
+  return new Promise((resolve, reject) => {
+    fetch("/api/setServiceInUse", {
+      method: "post",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ isInUse: isInUse }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log(data);
+        resolve();
+      })
+      .catch((err) => {
+        console.log(err);
+        reject(err);
+      });
+  });
+};
+
 const handleDeleteSpeechFile = (speechFile) => {
   return new Promise((resolve, reject) => {
     fetch("/api/deleteResponseFile", {
@@ -214,6 +238,7 @@ const handleAudioResponseFinished = async () => {
     if (globalSpeechFile) {
       await handleDeleteSpeechFile(globalSpeechFile);
       console.log("speech file deleted");
+      await handleServerSetInUse(false);
     }
   });
 };
@@ -230,8 +255,7 @@ const onRecordUp = async () => {
   handleServerStopRecord().then(async () => {
     //tell the server to submit the transcription to chatGPT
     handleServerSubmitTranscription().then(async (aiResponse) => {
-      console.log(aiResponse);
-
+      globalAIResponse = aiResponse;
       writeAIResponse(aiResponse);
       generateAIResponseFile().then(async (speechFile) => {
         globalSpeechFile = speechFile; //store in global...for now

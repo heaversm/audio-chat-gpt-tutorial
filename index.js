@@ -30,8 +30,6 @@ const COMPLETIONS_CONFIG = {
   temperature: 0.5, //0-1, higher = more creative
 };
 
-let aiResponse;
-
 const SAMPLE_RATE_HERTZ = 16000;
 const USE_INTERIM_RESULTS = false; //when true, get a steady stream of audio from the recording. In this case, you'll want the transcript to be set each time, vs. be added to.
 const RECOGNIZE_CONFIG = {
@@ -130,7 +128,7 @@ app.get("/api/submitTranscription", async (req, res) => {
     model: "gpt-3.5-turbo",
   });
   try {
-    aiResponse = completion.choices[0].message.content;
+    const aiResponse = completion.choices[0].message.content;
     res.status(200).json({ message: "success", aiResponse: aiResponse });
   } catch (error) {
     console.log(error);
@@ -144,7 +142,8 @@ app.get("/api/getTranscription", (req, res) => {
   res.status(200).json({ script: streamScript });
 });
 
-app.get("/api/generateAIResponseFile", async (req, res) => {
+app.post("/api/generateAIResponseFile", async (req, res) => {
+  const { aiResponse } = req.body;
   console.log("api generateResponseFile");
   const speechRequest = {
     input: { text: aiResponse },
@@ -242,6 +241,12 @@ app.post("/api/deleteResponseFile", (req, res) => {
       res.status(200).json({ message: "audio file deleted" });
     }
   });
+});
+
+app.post("/api/setServiceInUse", (req, res) => {
+  const { isInUse } = req.body;
+  serviceInUse = isInUse;
+  res.status(200).json({ message: `service in use set to ${serviceInUse}` });
 });
 
 
