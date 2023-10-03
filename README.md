@@ -11,6 +11,8 @@ This tutorial series will help you create your own audio chatGPT - talk to it, a
 * [nodejs](https://nodejs.org/en/download/)
 * Get an openAI API key [here](https://platform.openai.com/signup)
 * Set up a google cloud account, service account, and enable text to speech and speech to text APIs (watch [video 1](https://www.youtube.com/watch?v=Au4bCp8dagw&list=PLC_E8ugf8_OyaTl2c4NeYvsNdl4uw-6YC&index=1&ab_channel=MikeHeaversProjects) for instructions)
+* [Install Sox](https://www.npmjs.com/package/node-record-lpcm16#dependencies) - see the instructions for your OS.
+
 
 ### Running
 
