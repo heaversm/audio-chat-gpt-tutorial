@@ -1,8 +1,10 @@
 let transcriptionInterval;
 let globalSpeechFile;
+let globalTranscript;
+let serviceInUse;
 
 const toggleTranscriptionPolling = (active = false) => {
-  console.log("toggleTranscriptionPolling", active);
+  // console.log("toggleTranscriptionPolling", active);
   if (active) {
     transcriptionInterval = setInterval(() => {
       fetch("/api/getTranscription", {
@@ -14,8 +16,12 @@ const toggleTranscriptionPolling = (active = false) => {
         .then((res) => res.json())
         .then((data) => {
           if (data.script) {
-            console.log(data.script);
-            document.querySelector(".audio-transcript").innerText = data.script;
+            if (globalTranscript !== data.script) {
+              console.log(data.script);
+              globalTranscript = data.script;
+              document.querySelector(".audio-transcript").innerText =
+                data.script;
+            }
           }
         })
         .catch((err) => console.log(err));
@@ -23,6 +29,24 @@ const toggleTranscriptionPolling = (active = false) => {
   } else {
     clearInterval(transcriptionInterval);
   }
+};
+
+const getServiceStatus = async () => {
+  return new Promise((resolve, reject) => {
+    fetch("/api/getServiceStatus", {
+      method: "get",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        resolve(data.serviceInUse);
+      })
+      .catch((err) => {
+        reject(err);
+      });
+  });
 };
 
 const handleServerRecord = async () => {
@@ -86,12 +110,18 @@ const onRecordDown = async () => {
   //manage the state
   //manage the UI
   //tell the server to access the user's mic and start recording
-  handleServerRecord().then(async () => {
-    //manage the UI
-    //start looking for the latest transcript results
-    toggleTranscriptionPolling(true);
-  });
-  //listen for transcript results from the server
+  serviceInUse = await getServiceStatus();
+  if (serviceInUse) {
+    //TODO: implement better system for user notifications
+    alert("service in use - please try again in a minute or so");
+  } else {
+    handleServerRecord().then(async () => {
+      //manage the UI
+      //start looking for the latest transcript results
+      toggleTranscriptionPolling(true);
+    });
+    //listen for transcript results from the server
+  }
 };
 
 const writeAIResponse = (aiResponse) => {
@@ -120,12 +150,6 @@ const generateAIResponseFile = () => {
 const playAudioResponse = (speechFile) => {
   const audioPlayer = document.querySelector(".audio-response__player");
   audioPlayer.src = `/responseFiles/${speechFile}.mp3`;
-
-  audioPlayer.addEventListener("ended", () => {
-    console.log("audio playback ended");
-    handleAudioResponseFinished(speechFile);
-  });
-
   audioPlayer.play();
 };
 
@@ -179,16 +203,19 @@ const handleDeleteSpeechFile = (speechFile) => {
   });
 };
 
-const handleAudioResponseFinished = async (speechFile) => {
+const handleAudioResponseFinished = async () => {
   //clear the transcript from the textbox
   clearAudioTranscript();
   //clear audio response from the textbox
   clearAudioResponse();
   //reset the state and UI
   //clear the transcript from the server
-  handleServerClearTranscription();
-  //delete the speechFile from the server
-  handleDeleteSpeechFile(speechFile);
+  handleServerClearTranscription().then(async () => {
+    if (globalSpeechFile) {
+      await handleDeleteSpeechFile(globalSpeechFile);
+      console.log("speech file deleted");
+    }
+  });
 };
 
 const onRecordUp = async () => {
@@ -196,6 +223,9 @@ const onRecordUp = async () => {
   //manage the state
   //manage the UI
   //tell the server to stop recording
+  if (serviceInUse) {
+    return;
+  }
   toggleTranscriptionPolling(false);
   handleServerStopRecord().then(async () => {
     //tell the server to submit the transcription to chatGPT
@@ -217,6 +247,13 @@ const onRecordUp = async () => {
 };
 
 const addEventListeners = () => {
+  const audioPlayer = document.querySelector(".audio-response__player");
+
+  audioPlayer.addEventListener("ended", () => {
+    console.log("audio playback ended");
+    handleAudioResponseFinished();
+  });
+
   //start recording
   document
     .querySelector(".audio-record__btn")

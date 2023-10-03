@@ -53,6 +53,8 @@ const RECORD_CONFIG = {
 let streamScript = ""; //will hold the transcript of the user's request
 let recognizeStream; //will hold the google speech to text stream
 let recording; //will hold the noderecord instance;
+//TODO: enable more than one user to use the service at a time
+let serviceInUse = false; //disables recording when a user is actively transcribing
 
 const port = process.env.PORT || 3333;
 
@@ -143,7 +145,7 @@ app.get("/api/getTranscription", (req, res) => {
 });
 
 app.get("/api/generateAIResponseFile", async (req, res) => {
-  console.log("api generate");
+  console.log("api generateResponseFile");
   const speechRequest = {
     input: { text: aiResponse },
     // Select the language and SSML voice gender (optional)
@@ -168,12 +170,15 @@ app.get("/api/generateAIResponseFile", async (req, res) => {
       encoding: "binary",
       flag: "w", //write (default)
     });
+
+    //todo: stream is closing without write being ended
     res.status(200).json({ message: "success", speechFile: speechFileName });
   } catch (err) {
     console.error(err);
   }
 });
 
+//restarting a stream: https://github.com/GoogleCloudPlatform/nodejs-docs-samples/blob/main/speech/infiniteStreaming.js
 const clearRecognizeStream = () => {
   if (recognizeStream) {
     recognizeStream.end();
@@ -183,12 +188,25 @@ const clearRecognizeStream = () => {
 };
 
 const clearRecording = () => {
-  recording.stop();
-  recording = null;
+  if (recording) {
+    recording.stop();
+    recording = null;
+  }
 };
+
+app.get("/api/getServiceStatus", (req, res) => {
+  console.log("api getServiceStatus: service in use?", serviceInUse);
+  res.status(200).json({ serviceInUse: serviceInUse });
+});
 
 app.get("/api/recordVoice", (req, res) => {
   console.log("apiRecordVoice");
+  //only one user at a time for now
+  if (serviceInUse) {
+    res.status(500).json({ message: "service in use" });
+  } else {
+    serviceInUse = true;
+  }
   //if there's no recognize stream, create one
   if (!recognizeStream) {
     initRecognizeStream();
@@ -200,6 +218,9 @@ app.get("/api/recordVoice", (req, res) => {
 });
 
 app.get("/api/stopRecordVoice", (req, res) => {
+  if (!recognizeStream) {
+    res.status(500).json({ message: "no recognize stream" });
+  }
   stopRecordVoice();
   res.status(200).json({ message: "recording stopped" });
 });
