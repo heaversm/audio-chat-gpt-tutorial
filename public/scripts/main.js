@@ -2,7 +2,6 @@ let transcriptionInterval; //holds the interval to check for the latest transcri
 let globalSpeechFile; //holds the audio file for the ai's response
 let globalTranscript; //holds the transcribed audio from the user's mic
 let globalAIResponse; //holds the text response of the LLM to the user's transcript query
-let serviceInUse; //when true, hold off on any other recordings
 let userId;
 
 const handleInitUser = async () => {
@@ -52,24 +51,6 @@ const toggleTranscriptionPolling = (active = false) => {
   } else {
     clearInterval(transcriptionInterval);
   }
-};
-
-const getServiceStatus = async () => {
-  return new Promise((resolve, reject) => {
-    fetch("/api/getServiceStatus", {
-      method: "get",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        resolve(data.serviceInUse);
-      })
-      .catch((err) => {
-        reject(err);
-      });
-  });
 };
 
 const handleServerRecord = async () => {
@@ -137,20 +118,13 @@ const onRecordDown = async () => {
   //manage the state
   //manage the UI
   //tell the server to access the user's mic and start recording
-  //serviceInUse = await getServiceStatus();
-  serviceInUse = false;
-  if (serviceInUse) {
-    //TODO: implement better system for user notifications
-    alert("service in use - please try again in a minute or so");
-  } else {
-    console.log("down", Date.now());
-    handleServerRecord().then(async () => {
-      //manage the UI
-      //start looking for the latest transcript results
-      toggleTranscriptionPolling(true);
-    });
-    //listen for transcript results from the server
-  }
+  console.log("down", Date.now());
+  handleServerRecord().then(async () => {
+    //manage the UI
+    //start looking for the latest transcript results
+    toggleTranscriptionPolling(true);
+  });
+  //listen for transcript results from the server
 };
 
 const writeAIResponse = (aiResponse) => {
@@ -213,27 +187,6 @@ const handleServerClearTranscription = () => {
   });
 };
 
-const handleServerSetInUse = (isInUse = false) => {
-  return new Promise((resolve, reject) => {
-    fetch("/api/setServiceInUse", {
-      method: "post",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ isInUse: isInUse }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        console.log(data);
-        resolve();
-      })
-      .catch((err) => {
-        console.log(err);
-        reject(err);
-      });
-  });
-};
-
 const handleDeleteSpeechFile = (speechFile) => {
   return new Promise((resolve, reject) => {
     fetch("/api/deleteResponseFile", {
@@ -277,9 +230,7 @@ const onRecordUp = async () => {
   //manage the state
   //manage the UI
   //tell the server to stop recording
-  if (serviceInUse) {
-    return;
-  }
+
   toggleTranscriptionPolling(false);
   handleServerStopRecord().then(async () => {
     //tell the server to submit the transcription to chatGPT
