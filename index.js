@@ -35,7 +35,7 @@ async function initGCPAuth() {
 
 const initGCPLibraries = async () => {
   const mode = process.env.NODE_ENV;
-  if (mode !== "development") {
+  if (mode == "production") {
     console.log("gcp auth");
     await initGCPAuth().catch(console.error);
     console.log("speech init");
