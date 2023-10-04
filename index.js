@@ -19,6 +19,7 @@ const auth = new GoogleAuth.GoogleAuth({
   credentials: JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS),
   scopes: ["https://www.googleapis.com/auth/cloud-platform"],
 });
+console.log("auth");
 
 const speech = require("@google-cloud/speech");
 speechClient = new speech.SpeechClient({ auth });
