@@ -7,18 +7,51 @@ const fs = require("fs");
 const fsPromises = require("fs").promises;
 const { v4: uuidv4 } = require("uuid");
 const recorder = require("node-record-lpcm16");
+require("dotenv").config();
 
-// Imports the Google Cloud client library
-const speech = require("@google-cloud/speech");
-const speechClient = new speech.SpeechClient();
+const { auth } = require("google-auth-library");
 
-// Imports the Google Cloud text to speech library
-const textToSpeech = require('@google-cloud/text-to-speech');
-const ttsClient = new textToSpeech.TextToSpeechClient();
+// load the environment variable with our keys
+const keysEnvVar = process.env["GOOGLE_APPLICATION_CREDENTIALS"];
+if (!keysEnvVar) {
+  throw new Error(
+    "The $GOOGLE_CREDENTIALS environment variable was not found!"
+  );
+}
+const keys = JSON.parse(keysEnvVar);
+console.log("keys", keys);
 
+let speechClient;
+let ttsClient; //must be instantiated after gcp auth
+
+async function initGCPAuth() {
+  // load the JWT or UserRefreshClient from the keys
+  const client = auth.fromJSON(keys);
+  client.scopes = ["https://www.googleapis.com/auth/cloud-platform"];
+  const url = `https://dns.googleapis.com/dns/v1/projects/${keys.project_id}`;
+  const res = await client.request({ url });
+  console.log(res.data);
+}
+
+const initGCPLibraries = async () => {
+  const mode = process.env.NODE_ENV;
+  if (mode !== "development") {
+    console.log("gcp auth");
+    await initGCPAuth().catch(console.error);
+    console.log("speech init");
+  }
+  // Imports the Google Cloud client library
+  const speech = require("@google-cloud/speech");
+  speechClient = new speech.SpeechClient();
+
+  // Imports the Google Cloud text to speech library
+  const textToSpeech = require("@google-cloud/text-to-speech");
+  ttsClient = new textToSpeech.TextToSpeechClient();
+};
+
+initGCPLibraries();
 
 const OpenAI = require("openai");
-require("dotenv").config();
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
