@@ -9,47 +9,23 @@ const { v4: uuidv4 } = require("uuid");
 const recorder = require("node-record-lpcm16");
 require("dotenv").config();
 
-const { auth } = require("google-auth-library");
-
-// load the environment variable with our keys
-const keysEnvVar = process.env["GOOGLE_APPLICATION_CREDENTIALS"];
-if (!keysEnvVar) {
-  throw new Error(
-    "The $GOOGLE_CREDENTIALS environment variable was not found!"
-  );
-}
-const keys = JSON.parse(keysEnvVar);
-console.log("keys", keys);
+//GOOGLE AUTH NEEDED FOR CLOUD SERVERS:
+const GoogleAuth = require("google-auth-library/build/src/auth/googleauth");
 
 let speechClient;
 let ttsClient; //must be instantiated after gcp auth
 
-async function initGCPAuth() {
-  // load the JWT or UserRefreshClient from the keys
-  const client = auth.fromJSON(keys);
-  client.scopes = ["https://www.googleapis.com/auth/cloud-platform"];
-  const url = `https://dns.googleapis.com/dns/v1/projects/${keys.project_id}`;
-  const res = await client.request({ url });
-  console.log(res.data);
-}
+const auth = new GoogleAuth.GoogleAuth({
+  credentials: JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS),
+  scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+});
 
-const initGCPLibraries = async () => {
-  const mode = process.env.NODE_ENV;
-  if (mode == "production") {
-    console.log("gcp auth");
-    await initGCPAuth().catch(console.error);
-    console.log("speech init");
-  }
-  // Imports the Google Cloud client library
-  const speech = require("@google-cloud/speech");
-  speechClient = new speech.SpeechClient();
+const speech = require("@google-cloud/speech");
+speechClient = new speech.SpeechClient({ auth });
 
-  // Imports the Google Cloud text to speech library
-  const textToSpeech = require("@google-cloud/text-to-speech");
-  ttsClient = new textToSpeech.TextToSpeechClient();
-};
-
-initGCPLibraries();
+// Imports the Google Cloud text to speech library
+const textToSpeech = require("@google-cloud/text-to-speech");
+ttsClient = new textToSpeech.TextToSpeechClient({ auth });
 
 const OpenAI = require("openai");
 
