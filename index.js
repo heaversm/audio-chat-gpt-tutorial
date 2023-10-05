@@ -19,10 +19,11 @@ const auth = new GoogleAuth.GoogleAuth({
   credentials: JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS),
   scopes: ["https://www.googleapis.com/auth/cloud-platform"],
 });
-console.log("auth");
+// console.log("auth", auth);
 
 const speech = require("@google-cloud/speech");
 speechClient = new speech.SpeechClient({ auth });
+// console.log(speechClient);
 
 // Imports the Google Cloud text to speech library
 const textToSpeech = require("@google-cloud/text-to-speech");
@@ -89,6 +90,7 @@ const getSpeechFilePath = (speechFileName) => {
 };
 
 const onRecognizeData = (data, user) => {
+  console.log("onRecognizeData", data);
   const transcript =
     data.results[0] && data.results[0].alternatives[0]
       ? `${data.results[0].alternatives[0].transcript}\n`
